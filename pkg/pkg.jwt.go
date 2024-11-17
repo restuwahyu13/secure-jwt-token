@@ -63,15 +63,22 @@ func (h *jsonWebToken) createSecret(prefix string) (*SecretMetadata, error) {
 	}
 
 	if !secretKeyExist {
-		cipherTextRandom := time.Now().Format(time.UnixDate)
-		cipherText := hex.EncodeToString([]byte(cipherTextRandom))
+		timeNow := time.Now().Format(time.UnixDate)
 
-		cipherSignature, err := cipher.SHA512Sign(cipherText)
+		cipherTextRandom := fmt.Sprintf("%s:%s:%d", prefix, timeNow, h.env.JWT_EXPIRED)
+		cipherTextData := hex.EncodeToString([]byte(cipherTextRandom))
+
+		cipherSecretKey, err := cipher.SHA512Sign(cipherTextData)
 		if err != nil {
 			return nil, err
 		}
 
-		cipherKey, err := cipher.AES256Encrypt(h.env.JWT_SECRET_KEY, cipherSignature)
+		cipherText, err := cipher.SHA512Sign(timeNow)
+		if err != nil {
+			return nil, err
+		}
+
+		cipherKey, err := cipher.AES256Encrypt(cipherSecretKey, cipherText)
 		if err != nil {
 			return nil, err
 		}

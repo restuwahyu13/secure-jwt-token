@@ -4,8 +4,8 @@ Berikut adalah bagaimana cara membuat, **Secure** dan **Strong** `JWT Access Tok
 
 ## Benefit
 
-- [x] Dynamic secret key JWT Token
-- [x] Dynamic asymmetric password
 - [x] Secure & Strong JWT Token
+- [x] Dynamic Secret Key JWT Token
+- [x] Dynamic Asymmetric Password
 - [x] Strict identity access management
-- [x] Server side validation
+- [x] Server Side Validation

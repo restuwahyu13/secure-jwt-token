@@ -1,0 +1,37 @@
+[
+	{
+		"id": "5692c45c-1642-4efc-b74a-c4a9abf58421",
+		"name": "Leanne Graham",
+		"username": "Bret",
+		"email": "lg@gmail.com",
+		"password": "@Qwerty12"
+	},
+	{
+		"id": "6c7803d3-ee97-4d8e-a6fe-5bf96a3b4454",
+		"name": "Ervin Howell",
+		"username": "Antonette",
+		"email": "eh@gmail.com",
+		"password": "@Qwerty12"
+	},
+	{
+		"id": "5f7aed84-1f2d-4a73-9451-332784424819",
+		"name": "Clementine Bauch",
+		"username": "Samantha",
+		"email": "cb@gmail.com",
+		"password": "@Qwerty12"
+	},
+	{
+		"id": "38998fc6-d766-49de-9d7d-b62ffd33d8a6",
+		"name": "Patricia Lebsack",
+		"username": "Karianne",
+		"email": "pl@gmail.com",
+		"password": "@Qwerty12"
+	},
+	{
+		"id": "e77f9c90-faf2-41a2-92f1-03a14901825d",
+		"name": "Chelsey Dietrich",
+		"username": "Kamren",
+		"email": "cd@gmail.com",
+		"password": "@Qwerty12"
+	}
+]

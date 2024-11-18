@@ -56,7 +56,7 @@ func (h *cert) GeneratePrivateKey(password []byte) (string, error) {
 	} else {
 		decodePemBlock, _ := pem.Decode([]byte(privateKeyTransform))
 		if pemBlock == nil {
-			return "", errors.New("Invalid privateKey")
+			return "", errors.New("Invalid PrivateKey")
 		}
 
 		pemBlock = decodePemBlock
@@ -66,24 +66,24 @@ func (h *cert) GeneratePrivateKey(password []byte) (string, error) {
 }
 
 func (h *cert) PrivateKeyRawToKey(privateKey []byte, password []byte) (*rsa.PrivateKey, error) {
-	decodedPrivateKey, _ := pem.Decode(privateKey)
-	if decodedPrivateKey == nil {
-		return nil, errors.New("Invalid privateKey")
+	decodePrivateKey, _ := pem.Decode(privateKey)
+	if decodePrivateKey == nil {
+		return nil, errors.New("Invalid PrivateKey")
 	}
 
-	if x509.IsEncryptedPEMBlock(decodedPrivateKey) {
-		deceryptPrivateKey, err := x509.DecryptPEMBlock(decodedPrivateKey, password)
+	if x509.IsEncryptedPEMBlock(decodePrivateKey) {
+		decryptPrivateKey, err := x509.DecryptPEMBlock(decodePrivateKey, password)
 		if err != nil {
 			return nil, err
 		}
 
-		decodedPrivateKey, _ = pem.Decode(deceryptPrivateKey)
-		if decodedPrivateKey == nil {
-			return nil, errors.New("Invalid privateKey")
+		decodePrivateKey, _ = pem.Decode(decryptPrivateKey)
+		if decodePrivateKey == nil {
+			return nil, errors.New("Invalid PrivateKey")
 		}
 	}
 
-	rsaPrivKey, err := x509.ParsePKCS1PrivateKey(decodedPrivateKey.Bytes)
+	rsaPrivKey, err := x509.ParsePKCS1PrivateKey(decodePrivateKey.Bytes)
 	if err != nil {
 		return nil, err
 	}
@@ -112,22 +112,22 @@ func (h *cert) PublicKeyToRaw(publicKey *rsa.PublicKey) string {
 func (h *cert) PrivateKey(value string) error {
 	var privateKey string
 
-	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(value))
+	decode, err := base64.StdEncoding.DecodeString(strings.TrimSpace(value))
 	if err != nil {
 		return err
 	}
 
-	pemDecoded, _ := pem.Decode([]byte(decoded))
-	if pemDecoded == nil {
+	pemDecode, _ := pem.Decode([]byte(decode))
+	if pemDecode == nil {
 		return errors.New("Invalid PEM PrivateKey certificate")
 	}
 
-	if pemDecoded.Type == PRIVPKCS1 {
-		privateKey = string(pem.EncodeToMemory(pemDecoded))
-	} else if pemDecoded.Type == PRIVPKCS8 {
-		privateKey = string(pem.EncodeToMemory(pemDecoded))
-	} else if pemDecoded.Type == CERTIFICATE {
-		privateKey = string(pem.EncodeToMemory(pemDecoded))
+	if pemDecode.Type == PRIVPKCS1 {
+		privateKey = string(pem.EncodeToMemory(pemDecode))
+	} else if pemDecode.Type == PRIVPKCS8 {
+		privateKey = string(pem.EncodeToMemory(pemDecode))
+	} else if pemDecode.Type == CERTIFICATE {
+		privateKey = string(pem.EncodeToMemory(pemDecode))
 	} else {
 		return errors.New("Invalid PEM PrivateKey certificate")
 	}
@@ -147,19 +147,19 @@ func (h *cert) PublicKey(value string, rawPem bool) ([]byte, error) {
 		return nil, err
 	}
 
-	pemDecoded, _ := pem.Decode([]byte(externalPublicKey))
-	if pemDecoded == nil {
+	pemDecode, _ := pem.Decode([]byte(externalPublicKey))
+	if pemDecode == nil {
 		return nil, errors.New("Invalid PEM PublicKey certificate")
 	}
 
-	if !rawPem && pemDecoded.Type == PUBPKCS1 {
-		publicKey = pem.EncodeToMemory(pemDecoded)
-	} else if !rawPem && pemDecoded.Type == PUBPKCS8 {
-		publicKey = pem.EncodeToMemory(pemDecoded)
-	} else if !rawPem && pemDecoded.Type == CERTIFICATE {
-		publicKey = pem.EncodeToMemory(pemDecoded)
+	if !rawPem && pemDecode.Type == PUBPKCS1 {
+		publicKey = pem.EncodeToMemory(pemDecode)
+	} else if !rawPem && pemDecode.Type == PUBPKCS8 {
+		publicKey = pem.EncodeToMemory(pemDecode)
+	} else if !rawPem && pemDecode.Type == CERTIFICATE {
+		publicKey = pem.EncodeToMemory(pemDecode)
 	} else {
-		publicKey = pemDecoded.Bytes
+		publicKey = pemDecode.Bytes
 	}
 
 	return publicKey, nil

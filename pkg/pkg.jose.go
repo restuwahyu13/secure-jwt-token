@@ -208,35 +208,24 @@ func (h *jose) JwtSign(options *JwtSignOption) ([]byte, error) {
 
 func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, error) {
 	signatureKey := fmt.Sprintf("%s:credential", prefix)
-	secretMetadataField := "certificate_metadata"
 	signatureMetadataField := "signature_metadata"
 
-	secretKey := new(SecretMetadata)
-	signature := new(SignatureMetadata)
-
-	certMetadataBytes, err := redis.HGet(signatureKey, secretMetadataField)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := parser.Unmarshal(certMetadataBytes, secretKey); err != nil {
-		return nil, err
-	}
+	signatureMetadata := new(SignatureMetadata)
 
 	sigMetadataBytes, err := redis.HGet(signatureKey, signatureMetadataField)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := parser.Unmarshal(sigMetadataBytes, signature); err != nil {
+	if err := parser.Unmarshal(sigMetadataBytes, signatureMetadata); err != nil {
 		return nil, err
 	}
 
-	if reflect.DeepEqual(secretKey, SecretMetadata{}) && reflect.DeepEqual(signature, SignatureMetadata{}) {
+	if reflect.DeepEqual(signatureMetadata, SignatureMetadata{}) {
 		return nil, errors.New("Invalid secretkey or signature")
 	}
 
-	privateKey, err := cert.PrivateKeyRawToKey([]byte(signature.PrivKeyRaw), []byte(signature.CipherKey))
+	privateKey, err := cert.PrivateKeyRawToKey([]byte(signatureMetadata.PrivKeyRaw), []byte(signatureMetadata.CipherKey))
 	if err != nil {
 		return nil, err
 	}
@@ -269,13 +258,13 @@ func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, 
 	kid, ok := jwsHeaders.KeyID()
 	if !ok {
 		return nil, errors.New("Invalid keyid")
-	} else if kid != signature.JweKey.CipherText {
+	} else if kid != signatureMetadata.JweKey.CipherText {
 		return nil, errors.New("Invalid keyid")
 	}
 
-	aud := signature.SigKey[10:20]
-	iss := signature.SigKey[30:40]
-	sub := signature.SigKey[50:60]
+	aud := signatureMetadata.SigKey[10:20]
+	iss := signatureMetadata.SigKey[30:40]
+	sub := signatureMetadata.SigKey[50:60]
 	claim := "timestamp"
 
 	jwkKey, err := jwk.Import(privateKey)

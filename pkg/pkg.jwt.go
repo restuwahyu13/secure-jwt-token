@@ -29,7 +29,6 @@ type (
 		PrivKeyRaw string             `json:"privKeyRaw"`
 		SigKey     string             `json:"sigKey"`
 		CipherKey  string             `json:"cipherKey"`
-		JwkKey     JwkRawMetadata     `json:"jwkKey"`
 		JweKey     JweEncryptMetadata `json:"jweKey"`
 	}
 
@@ -161,11 +160,6 @@ func (h *jsonWebToken) createSignature(prefix string, body any) (*SignatureMetad
 
 		signatureOutput := hex.EncodeToString(signature)
 
-		formatPrivatekeyToJws, err := jso.ExportJsonWebKey(rsaPrivateKey)
-		if err != nil {
-			return nil, err
-		}
-
 		_, jweKey, err := jso.JweEncrypt(&rsaPrivateKey.PublicKey, signatureOutput)
 		if err != nil {
 			return nil, err
@@ -174,7 +168,6 @@ func (h *jsonWebToken) createSignature(prefix string, body any) (*SignatureMetad
 		signatureMetadata.PrivKeyRaw = secretKey.PrivKeyRaw
 		signatureMetadata.SigKey = signatureOutput
 		signatureMetadata.CipherKey = secretKey.CipherKey
-		signatureMetadata.JwkKey = formatPrivatekeyToJws.KeyRaw
 		signatureMetadata.JweKey = *jweKey
 
 		signatureMetadataByte, err := parser.Marshal(signatureMetadata)

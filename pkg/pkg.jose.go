@@ -233,12 +233,39 @@ func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, 
 	}
 
 	if reflect.DeepEqual(secretKey, SecretMetadata{}) && reflect.DeepEqual(signature, SignatureMetadata{}) {
-		return nil, errors.New("Invalid signature")
+		return nil, errors.New("Invalid secretkey or signature")
 	}
 
-	privateKey, err := cert.PrivateKeyRawToKey([]byte(signature.PrivKey), []byte(signature.CipherKey))
+	privateKey, err := cert.PrivateKeyRawToKey([]byte(signature.PrivKeyRaw), []byte(signature.CipherKey))
 	if err != nil {
 		return nil, err
+	}
+
+	exportJwk, err := jws.ParseString(token)
+	if err != nil {
+		return nil, err
+	}
+
+	jwsSignature := new(jws.Signature)
+	for _, sig := range exportJwk.Signatures() {
+		jwsSignature = sig
+		break
+	}
+
+	jwsHeaders := jwsSignature.ProtectedHeaders()
+
+	algorithm, ok := jwsHeaders.Algorithm()
+	if !ok {
+		return nil, errors.New("Invalid algorithm")
+	} else if algorithm != jwa.RS512() {
+		return nil, errors.New("Invalid algorithm")
+	}
+
+	kid, ok := jwsHeaders.KeyID()
+	if !ok {
+		return nil, errors.New("Invalid keyid")
+	} else if kid != signature.JweKey.CipherText {
+		return nil, errors.New("Invalid keyid")
 	}
 
 	aud := signature.SigKey[10:20]
@@ -251,7 +278,7 @@ func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, 
 		return nil, err
 	}
 
-	_, err = jws.Verify([]byte(token), jws.WithValidateKey(true), jws.WithKey(jwa.RS512(), jwkKey))
+	_, err = jws.Verify([]byte(token), jws.WithValidateKey(true), jws.WithKey(algorithm, jwkKey), jws.WithCompact(), jws.WithMessage(exportJwk))
 	if err != nil {
 		return nil, err
 	}

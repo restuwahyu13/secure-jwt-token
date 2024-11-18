@@ -20,17 +20,17 @@ type (
 	}
 
 	SecretMetadata struct {
-		PrivKey   string `json:"privKey"`
-		PubKey    string `json:"pubKey"`
-		CipherKey string `json:"cipherKey"`
+		PrivKeyRaw string `json:"privKeyRaw"`
+		CipherKey  string `json:"cipherKey"`
 	}
 
 	SignatureMetadata struct {
-		PrivKey   string             `json:"privKey"`
-		SigKey    string             `json:"sigKey"`
-		CipherKey string             `json:"cipherKey"`
-		JwkKey    JwkRawMetadata     `json:"jwkKey"`
-		JweKey    JweEncryptMetadata `json:"jweKey"`
+		PrivKey    *rsa.PrivateKey    `json:"privKey"`
+		PrivKeyRaw string             `json:"privKeyRaw"`
+		SigKey     string             `json:"sigKey"`
+		CipherKey  string             `json:"cipherKey"`
+		JwkKey     JwkRawMetadata     `json:"jwkKey"`
+		JweKey     JweEncryptMetadata `json:"jweKey"`
 	}
 
 	jsonWebToken struct {
@@ -50,7 +50,7 @@ func NewJsonWebToken(env configs.Environtment, redis Redis) JsonWebToken {
 	return &jsonWebToken{env: env, redis: redis}
 }
 
-func (h *jsonWebToken) createSecret(prefix string) (*SecretMetadata, error) {
+func (h *jsonWebToken) createSecret(prefix string, body []byte) (*SecretMetadata, error) {
 	var (
 		secretMetadata *SecretMetadata = new(SecretMetadata)
 		secretKey      string          = fmt.Sprintf("%s:credential", prefix)
@@ -65,7 +65,7 @@ func (h *jsonWebToken) createSecret(prefix string) (*SecretMetadata, error) {
 	if !secretKeyExist {
 		timeNow := time.Now().Format(time.UnixDate)
 
-		cipherTextRandom := fmt.Sprintf("%s:%s:%d", prefix, timeNow, h.env.JWT_EXPIRED)
+		cipherTextRandom := fmt.Sprintf("%s:%s:%s:%d", prefix, string(body), timeNow, h.env.JWT_EXPIRED)
 		cipherTextData := hex.EncodeToString([]byte(cipherTextRandom))
 
 		cipherSecretKey, err := cipher.SHA512Sign(cipherTextData)
@@ -90,13 +90,7 @@ func (h *jsonWebToken) createSecret(prefix string) (*SecretMetadata, error) {
 			return nil, err
 		}
 
-		rsaPrivateKey, err := cert.PrivateKeyRawToKey([]byte(privateKey), rsaPrivateKeyPassword)
-		if err != nil {
-			return nil, err
-		}
-
-		secretMetadata.PrivKey = privateKey
-		secretMetadata.PubKey = cert.PublicKeyToRaw(&rsaPrivateKey.PublicKey)
+		secretMetadata.PrivKeyRaw = privateKey
 		secretMetadata.CipherKey = cipherKey
 
 		secretMetadataByte, err := parser.Marshal(secretMetadata)
@@ -137,17 +131,17 @@ func (h *jsonWebToken) createSignature(prefix string, body any) (*SignatureMetad
 	}
 
 	if !signaturetKeyExist {
-		secretKey, err := h.createSecret(prefix)
-		if err != nil {
-			return nil, err
-		}
-
-		rsaPrivateKey, err := cert.PrivateKeyRawToKey([]byte(secretKey.PrivKey), []byte(secretKey.CipherKey))
-		if err != nil {
-			return nil, err
-		}
-
 		bodyByte, err := parser.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+
+		secretKey, err := h.createSecret(prefix, bodyByte)
+		if err != nil {
+			return nil, err
+		}
+
+		rsaPrivateKey, err := cert.PrivateKeyRawToKey([]byte(secretKey.PrivKeyRaw), []byte(secretKey.CipherKey))
 		if err != nil {
 			return nil, err
 		}
@@ -177,23 +171,25 @@ func (h *jsonWebToken) createSignature(prefix string, body any) (*SignatureMetad
 			return nil, err
 		}
 
-		signatureMetadata.PrivKey = secretKey.PrivKey
+		signatureMetadata.PrivKeyRaw = secretKey.PrivKeyRaw
 		signatureMetadata.SigKey = signatureOutput
 		signatureMetadata.CipherKey = secretKey.CipherKey
 		signatureMetadata.JwkKey = formatPrivatekeyToJws.KeyRaw
 		signatureMetadata.JweKey = *jweKey
 
-		signatureMetadata, err := parser.Marshal(signatureMetadata)
+		signatureMetadataByte, err := parser.Marshal(signatureMetadata)
 		if err != nil {
 			return nil, err
 		}
 
-		jwtClaim := string(signatureMetadata)
+		jwtClaim := string(signatureMetadataByte)
 		jwtExpired := time.Duration(time.Minute * time.Duration(h.env.JWT_EXPIRED))
 
 		if err := h.redis.HSetEx(signatureKey, jwtExpired, signatureField, jwtClaim); err != nil {
 			return nil, err
 		}
+
+		signatureMetadata.PrivKey = rsaPrivateKey
 	} else {
 		signatureMetadataByte, err := h.redis.HGet(signatureKey, signatureField)
 		if err != nil {
@@ -235,11 +231,6 @@ func (h *jsonWebToken) Sign(prefix string, body any) ([]byte, error) {
 			return nil, err
 		}
 
-		privateKey, err := cert.PrivateKeyRawToKey([]byte(signature.PrivKey), []byte(signature.CipherKey))
-		if err != nil {
-			return nil, err
-		}
-
 		duration := time.Duration(time.Minute * time.Duration(h.env.JWT_EXPIRED))
 		jwtIat := time.Now().UTC().Add(-duration)
 		jwtExp := time.Now().Add(duration)
@@ -247,7 +238,7 @@ func (h *jsonWebToken) Sign(prefix string, body any) ([]byte, error) {
 		tokenPayload := new(JwtSignOption)
 		tokenPayload.SecretKey = signature.CipherKey
 		tokenPayload.Kid = signature.JweKey.CipherText
-		tokenPayload.PrivateKey = privateKey
+		tokenPayload.PrivateKey = signature.PrivKey
 		tokenPayload.Aud = []string{aud}
 		tokenPayload.Iss = iss
 		tokenPayload.Sub = sub

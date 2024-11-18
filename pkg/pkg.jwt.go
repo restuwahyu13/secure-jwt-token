@@ -50,69 +50,36 @@ func NewJsonWebToken(env configs.Environtment, redis Redis) JsonWebToken {
 }
 
 func (h *jsonWebToken) createSecret(prefix string, body []byte) (*SecretMetadata, error) {
-	var (
-		secretMetadata *SecretMetadata = new(SecretMetadata)
-		secretKey      string          = fmt.Sprintf("%s:credential", prefix)
-		secretField    string          = "certificate_metadata"
-	)
+	secretMetadata := new(SecretMetadata)
+	timeNow := time.Now().Format(time.UnixDate)
 
-	secretKeyExist, err := h.redis.HExists(secretKey, secretField)
+	cipherTextRandom := fmt.Sprintf("%s:%s:%s:%d", prefix, string(body), timeNow, h.env.JWT_EXPIRED)
+	cipherTextData := hex.EncodeToString([]byte(cipherTextRandom))
+
+	cipherSecretKey, err := cipher.SHA512Sign(cipherTextData)
 	if err != nil {
 		return nil, err
 	}
 
-	if !secretKeyExist {
-		timeNow := time.Now().Format(time.UnixDate)
-
-		cipherTextRandom := fmt.Sprintf("%s:%s:%s:%d", prefix, string(body), timeNow, h.env.JWT_EXPIRED)
-		cipherTextData := hex.EncodeToString([]byte(cipherTextRandom))
-
-		cipherSecretKey, err := cipher.SHA512Sign(cipherTextData)
-		if err != nil {
-			return nil, err
-		}
-
-		cipherText, err := cipher.SHA512Sign(timeNow)
-		if err != nil {
-			return nil, err
-		}
-
-		cipherKey, err := cipher.AES256Encrypt(cipherSecretKey, cipherText)
-		if err != nil {
-			return nil, err
-		}
-
-		rsaPrivateKeyPassword := []byte(cipherKey)
-
-		privateKey, err := cert.GeneratePrivateKey(rsaPrivateKeyPassword)
-		if err != nil {
-			return nil, err
-		}
-
-		secretMetadata.PrivKeyRaw = privateKey
-		secretMetadata.CipherKey = cipherKey
-
-		secretMetadataByte, err := parser.Marshal(secretMetadata)
-		if err != nil {
-			return nil, err
-		}
-
-		jwtClaim := string(secretMetadataByte)
-		jwtExpired := time.Duration(time.Minute * time.Duration(h.env.JWT_EXPIRED))
-
-		if err := h.redis.HSetEx(secretKey, jwtExpired, secretField, jwtClaim); err != nil {
-			return nil, err
-		}
-	} else {
-		secretMetadataByte, err := h.redis.HGet(secretKey, secretField)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := parser.Unmarshal(secretMetadataByte, secretMetadata); err != nil {
-			return nil, err
-		}
+	cipherText, err := cipher.SHA512Sign(timeNow)
+	if err != nil {
+		return nil, err
 	}
+
+	cipherKey, err := cipher.AES256Encrypt(cipherSecretKey, cipherText)
+	if err != nil {
+		return nil, err
+	}
+
+	rsaPrivateKeyPassword := []byte(cipherKey)
+
+	privateKey, err := cert.GeneratePrivateKey(rsaPrivateKeyPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	secretMetadata.PrivKeyRaw = privateKey
+	secretMetadata.CipherKey = cipherKey
 
 	return secretMetadata, nil
 }
@@ -124,76 +91,59 @@ func (h *jsonWebToken) createSignature(prefix string, body any) (*SignatureMetad
 		signatureField    string             = "signature_metadata"
 	)
 
-	signaturetKeyExist, err := h.redis.HExists(signatureKey, signatureField)
+	bodyByte, err := parser.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 
-	if !signaturetKeyExist {
-		bodyByte, err := parser.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-
-		secretKey, err := h.createSecret(prefix, bodyByte)
-		if err != nil {
-			return nil, err
-		}
-
-		rsaPrivateKey, err := cert.PrivateKeyRawToKey([]byte(secretKey.PrivKeyRaw), []byte(secretKey.CipherKey))
-		if err != nil {
-			return nil, err
-		}
-
-		cipherHash512 := sha512.New()
-		cipherHash512.Write(bodyByte)
-		cipherHash512Body := cipherHash512.Sum(nil)
-
-		signature, err := rsa.SignPKCS1v15(rand.Reader, rsaPrivateKey, crypto.SHA512, cipherHash512Body)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := rsa.VerifyPKCS1v15(&rsaPrivateKey.PublicKey, crypto.SHA512, cipherHash512Body, signature); err != nil {
-			return nil, err
-		}
-
-		signatureOutput := hex.EncodeToString(signature)
-
-		_, jweKey, err := jso.JweEncrypt(&rsaPrivateKey.PublicKey, signatureOutput)
-		if err != nil {
-			return nil, err
-		}
-
-		signatureMetadata.PrivKeyRaw = secretKey.PrivKeyRaw
-		signatureMetadata.SigKey = signatureOutput
-		signatureMetadata.CipherKey = secretKey.CipherKey
-		signatureMetadata.JweKey = *jweKey
-
-		signatureMetadataByte, err := parser.Marshal(signatureMetadata)
-		if err != nil {
-			return nil, err
-		}
-
-		jwtClaim := string(signatureMetadataByte)
-		jwtExpired := time.Duration(time.Minute * time.Duration(h.env.JWT_EXPIRED))
-
-		if err := h.redis.HSetEx(signatureKey, jwtExpired, signatureField, jwtClaim); err != nil {
-			return nil, err
-		}
-
-		signatureMetadata.PrivKey = rsaPrivateKey
-	} else {
-		signatureMetadataByte, err := h.redis.HGet(signatureKey, signatureField)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := parser.Unmarshal(signatureMetadataByte, signatureMetadata); err != nil {
-			return nil, err
-		}
+	secretKey, err := h.createSecret(prefix, bodyByte)
+	if err != nil {
+		return nil, err
 	}
 
+	rsaPrivateKey, err := cert.PrivateKeyRawToKey([]byte(secretKey.PrivKeyRaw), []byte(secretKey.CipherKey))
+	if err != nil {
+		return nil, err
+	}
+
+	cipherHash512 := sha512.New()
+	cipherHash512.Write(bodyByte)
+	cipherHash512Body := cipherHash512.Sum(nil)
+
+	signature, err := rsa.SignPKCS1v15(rand.Reader, rsaPrivateKey, crypto.SHA512, cipherHash512Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := rsa.VerifyPKCS1v15(&rsaPrivateKey.PublicKey, crypto.SHA512, cipherHash512Body, signature); err != nil {
+		return nil, err
+	}
+
+	signatureOutput := hex.EncodeToString(signature)
+
+	_, jweKey, err := jso.JweEncrypt(&rsaPrivateKey.PublicKey, signatureOutput)
+	if err != nil {
+		return nil, err
+	}
+
+	signatureMetadata.PrivKeyRaw = secretKey.PrivKeyRaw
+	signatureMetadata.SigKey = signatureOutput
+	signatureMetadata.CipherKey = secretKey.CipherKey
+	signatureMetadata.JweKey = *jweKey
+
+	signatureMetadataByte, err := parser.Marshal(signatureMetadata)
+	if err != nil {
+		return nil, err
+	}
+
+	jwtClaim := string(signatureMetadataByte)
+	jwtExpired := time.Duration(time.Minute * time.Duration(h.env.JWT_EXPIRED))
+
+	if err := h.redis.HSetEx(signatureKey, jwtExpired, signatureField, jwtClaim); err != nil {
+		return nil, err
+	}
+
+	signatureMetadata.PrivKey = rsaPrivateKey
 	return signatureMetadata, nil
 }
 

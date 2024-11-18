@@ -278,7 +278,7 @@ func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, 
 		return nil, err
 	}
 
-	_, err = jws.Verify([]byte(token), jws.WithValidateKey(true), jws.WithKey(algorithm, jwkKey), jws.WithCompact(), jws.WithMessage(exportJwk))
+	_, err = jws.Verify([]byte(token), jws.WithValidateKey(true), jws.WithKey(algorithm, jwkKey), jws.WithMessage(exportJwk))
 	if err != nil {
 		return nil, err
 	}

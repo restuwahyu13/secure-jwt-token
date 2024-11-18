@@ -211,13 +211,12 @@ func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, 
 	signatureMetadataField := "signature_metadata"
 
 	signatureMetadata := new(SignatureMetadata)
-
-	sigMetadataBytes, err := redis.HGet(signatureKey, signatureMetadataField)
+	signatureMetadataBytes, err := redis.HGet(signatureKey, signatureMetadataField)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := parser.Unmarshal(sigMetadataBytes, signatureMetadata); err != nil {
+	if err := parser.Unmarshal(signatureMetadataBytes, signatureMetadata); err != nil {
 		return nil, err
 	}
 

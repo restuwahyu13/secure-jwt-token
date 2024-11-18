@@ -289,7 +289,7 @@ func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, 
 	}
 
 	jwtParse, err := jwt.Parse([]byte(token),
-		jwt.WithKey(jwa.RS512(), privateKey),
+		jwt.WithKey(algorithm, privateKey),
 		jwt.WithAudience(aud),
 		jwt.WithIssuer(iss),
 		jwt.WithSubject(sub),

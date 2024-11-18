@@ -241,14 +241,19 @@ func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, 
 		return nil, err
 	}
 
-	exportJwk, err := jws.ParseString(token)
+	exportJws, err := jws.ParseString(token)
 	if err != nil {
 		return nil, err
 	}
 
+	signatures := exportJws.Signatures()
+	if len(signatures) < 1 {
+		return nil, errors.New("Invalid signature")
+	}
+
 	jwsSignature := new(jws.Signature)
-	for _, sig := range exportJwk.Signatures() {
-		jwsSignature = sig
+	for _, signature := range signatures {
+		jwsSignature = signature
 		break
 	}
 
@@ -278,7 +283,7 @@ func (h *jose) JwtVerify(prefix string, token string, redis Redis) (*jwt.Token, 
 		return nil, err
 	}
 
-	_, err = jws.Verify([]byte(token), jws.WithValidateKey(true), jws.WithKey(algorithm, jwkKey), jws.WithMessage(exportJwk))
+	_, err = jws.Verify([]byte(token), jws.WithValidateKey(true), jws.WithKey(algorithm, jwkKey), jws.WithMessage(exportJws))
 	if err != nil {
 		return nil, err
 	}

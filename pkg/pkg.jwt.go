@@ -8,6 +8,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/restuwahyu13/secure-jwt-token/configs"
@@ -165,8 +166,9 @@ func (h *jsonWebToken) Sign(prefix string, body any) ([]byte, error) {
 		aud := signature.SigKey[10:20]
 		iss := signature.SigKey[30:40]
 		sub := signature.SigKey[50:60]
+		suffix := int(math.Pow(float64(h.env.JWT_EXPIRED), float64(len(aud)+len(iss)+len(sub))))
 
-		secretKey := fmt.Sprintf("%s:%s:%s:%d", aud, iss, sub, h.env.JWT_EXPIRED)
+		secretKey := fmt.Sprintf("%s:%s:%s:%s:%d", aud, iss, sub, timestamp, suffix)
 		secretData := hex.EncodeToString([]byte(secretKey))
 
 		jti, err := cipher.AES256Encrypt(secretData, prefix)

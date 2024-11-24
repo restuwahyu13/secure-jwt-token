@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -54,7 +55,14 @@ func Auth(w http.ResponseWriter, r *http.Request, env configs.Environtment, redi
 		return errors.New("Invalid JwtID")
 	}
 
-	secretKey := fmt.Sprintf("%s:%s:%s:%d", aud[0], iss, sub, env.JWT_EXPIRED)
+	timestamp := ""
+	if err := tokenMetadata.Get("timestamp", &timestamp); err != nil {
+		return err
+	}
+
+	suffix := int(math.Pow(float64(env.JWT_EXPIRED), float64(len(aud[0])+len(iss)+len(sub))))
+
+	secretKey := fmt.Sprintf("%s:%s:%s:%s:%d", aud[0], iss, sub, timestamp, suffix)
 	secretData := hex.EncodeToString([]byte(secretKey))
 
 	key, err := crypto.AES256Decrypt(secretData, jti)
